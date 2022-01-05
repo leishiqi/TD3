@@ -8,6 +8,21 @@ import utils
 import TD3
 import OurDDPG
 import DDPG
+import pymysql
+
+
+host = 'localhost'
+port = 3306
+db = 'building_management'
+user = 'root'
+password = '971016Lsq'
+
+
+# ---- 用pymysql 操作数据库
+def get_connection():
+    conn = pymysql.connect(host=host, port=port, db=db, user=user, password=password)
+    return conn
+
 
 
 # Runs policy for X episodes and returns average reward
@@ -108,6 +123,9 @@ if __name__ == "__main__":
 	episode_reward = 0
 	episode_timesteps = 0
 	episode_num = 0
+	conn = get_connection()
+	cursor = conn.cursor(pymysql.cursors.DictCursor)
+	conn.autocommit = True
 
 	for t in range(int(args.max_timesteps)):
 		
@@ -122,9 +140,22 @@ if __name__ == "__main__":
 				+ np.random.normal(0, max_action * args.expl_noise, size=action_dim)
 			).clip(-max_action, max_action)
 
+		#Store action
+		setpoint = min(max(action[0], env.min_setpoint), env.max_setpoint)
+		sql_insert = "insert into setpoint values(null, %s)"
+		cursor.execute(sql_insert, setpoint)
+
 		# Perform action
 		next_state, reward, done, _ = env.step(action) 
 		done_bool = float(done) if episode_timesteps < env._max_episode_steps else 0
+
+		#Read new state
+		sql_query = "SELECT PMV, Energy_consumption FROM thermal_state WHERE ID = (SELECT MAX(ID) FROM thermal_state)"
+		cursor.execute(sql_query)
+		data = cursor.fetchone()
+		PMV = data['PMV']
+		Energy = data['Energy_consumption']
+		next_state = np.array([PMV, Energy], dtype=np.float32)
 
 		# Store data in replay buffer
 		replay_buffer.add(state, action, next_state, reward, done_bool)
