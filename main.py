@@ -48,10 +48,10 @@ def eval_policy(policy, env_name, seed, eval_episodes=10):
 
 
 if __name__ == "__main__":
-	
+
 	parser = argparse.ArgumentParser()
 	parser.add_argument("--policy", default="TD3")                  # Policy name (TD3, DDPG or OurDDPG)
-	parser.add_argument("--env", default="HalfCheetah-v2")          # OpenAI gym environment name
+	parser.add_argument("--env", default="My_Env-v0")          # OpenAI gym environment name
 	parser.add_argument("--seed", default=0, type=int)              # Sets Gym, PyTorch and Numpy seeds
 	parser.add_argument("--start_timesteps", default=25e3, type=int)# Time steps initial random policy is used
 	parser.add_argument("--eval_freq", default=5e3, type=int)       # How often (time steps) we evaluate
@@ -85,9 +85,9 @@ if __name__ == "__main__":
 	env.action_space.seed(args.seed)
 	torch.manual_seed(args.seed)
 	np.random.seed(args.seed)
-	
+
 	state_dim = env.observation_space.shape[0]
-	action_dim = env.action_space.shape[0] 
+	action_dim = env.action_space.shape[0]
 	max_action = float(env.action_space.high[0])
 
 	kwargs = {
@@ -115,7 +115,7 @@ if __name__ == "__main__":
 		policy.load(f"./models/{policy_file}")
 
 	replay_buffer = utils.ReplayBuffer(state_dim, action_dim)
-	
+
 	# Evaluate untrained policy
 	evaluations = [eval_policy(policy, args.env, args.seed)]
 
@@ -128,7 +128,7 @@ if __name__ == "__main__":
 	conn.autocommit = True
 
 	for t in range(int(args.max_timesteps)):
-		
+
 		episode_timesteps += 1
 
 		# Select action randomly or according to policy
@@ -140,22 +140,28 @@ if __name__ == "__main__":
 				+ np.random.normal(0, max_action * args.expl_noise, size=action_dim)
 			).clip(-max_action, max_action)
 
-		#Store action
+		# Store action
 		setpoint = min(max(action[0], env.min_setpoint), env.max_setpoint)
 		sql_insert = "insert into setpoint values(null, %s)"
 		cursor.execute(sql_insert, setpoint)
+		conn.commit()
 
 		# Perform action
-		next_state, reward, done, _ = env.step(action) 
-		done_bool = float(done) if episode_timesteps < env._max_episode_steps else 0
+		next_state, reward, done, _ = env.step(action)
+		done_bool = float(done) if episode_timesteps < env.spec.max_episode_steps else 0
 
-		#Read new state
+		# Read new state
 		sql_query = "SELECT PMV, Energy_consumption FROM thermal_state WHERE ID = (SELECT MAX(ID) FROM thermal_state)"
 		cursor.execute(sql_query)
 		data = cursor.fetchone()
+		conn.commit()
 		PMV = data['PMV']
 		Energy = data['Energy_consumption']
 		next_state = np.array([PMV, Energy], dtype=np.float32)
+		print(f"energy: {Energy} reward: {reward}")
+		# Update the state of env
+		env.state[0] = PMV
+		env.state[1] = Energy
 
 		# Store data in replay buffer
 		replay_buffer.add(state, action, next_state, reward, done_bool)
@@ -167,17 +173,18 @@ if __name__ == "__main__":
 		if t >= args.start_timesteps:
 			policy.train(replay_buffer, args.batch_size)
 
-		if done: 
+		if done:
 			# +1 to account for 0 indexing. +0 on ep_timesteps since it will increment +1 even if done=True
 			print(f"Total T: {t+1} Episode Num: {episode_num+1} Episode T: {episode_timesteps} Reward: {episode_reward:.3f}")
 			# Reset environment
 			state, done = env.reset(), False
 			episode_reward = 0
 			episode_timesteps = 0
-			episode_num += 1 
+			episode_num += 1
 
 		# Evaluate episode
 		if (t + 1) % args.eval_freq == 0:
 			evaluations.append(eval_policy(policy, args.env, args.seed))
 			np.save(f"./results/{file_name}", evaluations)
 			if args.save_model: policy.save(f"./models/{file_name}")
+	conn.close()
