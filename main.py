@@ -158,7 +158,7 @@ if __name__ == "__main__":
 		PMV = data['PMV']
 		Energy = data['Energy_consumption']
 		next_state = np.array([PMV, Energy], dtype=np.float32)
-		print(f"energy: {Energy} reward: {reward}")
+		# print(f"energy: {Energy} reward: {reward}")
 		# Update the state of env
 		env.state[0] = PMV
 		env.state[1] = Energy
