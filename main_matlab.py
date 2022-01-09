@@ -112,7 +112,7 @@ def eval_policy(policy, env_name, seed, eval_episodes=10):
 
 
 # Evaluate untrained policy
-evaluations = [eval_policy(policy, args.env, args.seed)]
+# evaluations = [eval_policy(policy, args.env, args.seed)]
 
 state, done = env.reset(), False
 episode_reward = 0
