@@ -176,9 +176,9 @@ def read_state(step, cur_action):
 
     if done:
         # +1 to account for 0 indexing. +0 on ep_timesteps since it will increment +1 even if done=True
-        back_reward = episode_reward
-        print(
-            f"Total T: {step + 1} Episode Num: {episode_num + 1} Reward: {episode_reward:.3f}")
+        sql_reward = "insert into episode_reward values(null, %s, %s, %s)"
+        cursor.execute(sql_reward, step, episode_num + 1, episode_reward)
+        Conn.commit()
         # Reset environment
         state, done = env.reset(), False
         episode_reward = 0
@@ -192,4 +192,3 @@ def read_state(step, cur_action):
         np.save(f"./results/{file_name}", evaluations)
         if args.save_model: policy.save(f"./models/{file_name}")
     """
-    return back_reward
