@@ -19,7 +19,7 @@ password = '971016Lsq'
 parser = argparse.ArgumentParser()
 parser.add_argument("--policy", default="TD3")  # Policy name (TD3, DDPG or OurDDPG)
 parser.add_argument("--env", default="My_Env-v0")  # OpenAI gym environment name
-parser.add_argument("--seed", default=0, type=int)  # Sets Gym, PyTorch and Numpy seeds
+parser.add_argument("--seed", default=1, type=int)  # Sets Gym, PyTorch and Numpy seeds
 parser.add_argument("--start_timesteps", default=30, type=int)  # Time steps initial random policy is used
 parser.add_argument("--eval_freq", default=5e3, type=int)  # How often (time steps) we evaluate
 parser.add_argument("--expl_noise", default=0.1)  # Std of Gaussian exploration noise
@@ -117,7 +117,7 @@ def eval_policy(policy, env_name, seed, eval_episodes=10):
 state, done = env.reset(), False
 episode_reward = 0
 episode_timesteps = 0
-episode_num = 0
+episode_num = 1
 Conn = get_connection()
 cursor = Conn.cursor(pymysql.cursors.DictCursor)
 Conn.autocommit = True
@@ -176,11 +176,12 @@ def read_state(step, cur_action):
 
     if done:
         # +1 to account for 0 indexing. +0 on ep_timesteps since it will increment +1 even if done=True
-        sql_reward = "insert into episode_reward values(null, %s, %s, %s)"
-        cursor.execute(sql_reward, step, episode_num + 1, episode_reward)
+        sql_reward = "insert into episode_reward values(%s, %s, %s, %s)" % \
+                     (step, step, episode_num, episode_reward)
+        cursor.execute(sql_reward)
         Conn.commit()
         # Reset environment
-        state, done = env.reset(), False
+        done = False
         episode_reward = 0
         episode_timesteps = 0
         episode_num += 1
